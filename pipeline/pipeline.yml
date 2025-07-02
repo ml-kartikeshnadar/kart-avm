@@ -8,12 +8,12 @@ parameters:
     values:
     - 'Standard' # Must be a single line hard-coded as 'Standard' or 'Azure Virtual Desktop'
   - name: environment
-    displayName: Environment
+    displayName: LZ Environment
     type: string
-    default: mgm
+    default: conn
     values:
-    - mgm
-    - dev
+    - conn
+    - ids
     - prd
   - name: tfApplyForceBranch
     displayName: 'Allow "terraform apply" on feature branch?'
