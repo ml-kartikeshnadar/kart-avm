@@ -62,7 +62,7 @@ variables:
 
 resources:
   repositories:
-    - repository: tftemplate
+    - repository: ado-tftemplate
       endpoint: ml-kartikeshnadar
       name: ml-kartikeshnadar/ado-tfpipeline
       ref: 'https://github.com/ml-kartikeshnadar/ado-tfpipeline'
