@@ -1,0 +1,132 @@
+---
+name: ${{ parameters.environment }}.$(DayOfYear)$(Rev:.r)
+
+parameters:
+  - name: deploymenttype
+    displayName: Deployment Type (Standard or Azure Virtual Desktop)
+    type: string
+    values:
+    - 'Standard' # Must be a single line hard-coded as 'Standard' or 'Azure Virtual Desktop'
+  - name: environment
+    displayName: Environment
+    type: string
+    default: mgm
+    values:
+    - mgm
+    - dev
+    - prd
+  - name: tfApplyForceBranch
+    displayName: 'Allow "terraform apply" on feature branch?'
+    type: boolean
+    default: false
+  - name: tfCompliance
+    displayName: 'Perform Terraform compliance testing?'
+    type: boolean
+    default: false
+  - name: backendAzureRmAutoCreate
+    displayName: 'Initialise tfstate?'
+    type: boolean
+    default: false
+
+variables:
+  - name: terraformVersion                 # must match https://github.com/OuterSrc/terraform-azurerm-caf/blob/develop/main.tf
+    value: '1.8.5'
+  - name: tflintAzureRulesetVersion        # check latest at https://github.com/terraform-linters/tflint-ruleset-azurerm
+    value: '0.26.0'
+  - name: tflintVersion                    # check latest at https://github.com/terraform-linters/tflint
+    value: 'v0.51.2'
+  - name: azpsversion
+    value: '10.3.0'
+  - name: timeoutInMinutes
+    value: 0
+  - name: longname                         # uses repo name to populate tfstate variables
+    value: $[ lower(replace(variables['Build.Repository.Name'], 'kart-avm/', '')) ]
+  - name: shortname                        # repo name without hyphens for storage account name
+    value: $[ lower(replace(variables.longname, '-', '')) ]
+  - name: backendAzureRmResourceGroupName  # tfstate resource group
+    value: rg-$(longname)-${{ parameters.environment }}-tf
+  - name: backendAzureRmStorageAccountName # tfstate storage account
+    value: st$(shortname)${{ parameters.environment }}tf
+  - name: backendAzureRmContainerName      # tfstate container name
+    value: 'tfstate'
+  - name: backendAzureRmKey                # tfstate file name
+    value: $(longname).${{ parameters.environment }}.tfstate
+  - name: workingDirectory                 # terraform configuration path
+    value: 'terraform/'
+  - template: './env/${{ parameters.environment }}/variables.yml'
+  # - name: planCommandOptions               # No longer required. May be used to override automated behaviour
+  #   value: 
+  #     # -var-file=$(System.DefaultWorkingDirectory)/terraform/env/$(environment)/<filename>.tfvars
+  # - name: tfEnvVars
+  #   value: "TF_LOG=DEBUG"
+
+resources:
+  repositories:
+    - repository: tftemplate
+      endpoint: InnerSrc
+      name: InnerSrc/sg-ado-pipelineterraform
+      ref: 'refs/tags/v1.2.0'
+      type: github
+
+trigger: none
+pr: none
+
+stages:
+- template: terraform.yml@tftemplate
+  parameters:
+    applyCommandOptions:              ${{ variables.applyCommandOptions }}
+    azureSubscription:                ${{ variables.azureSubscription }} # Use if service connection can access >1 sub
+    backendAzureRmAutoCreate:         ${{ parameters.backendAzureRmAutoCreate }}
+    backendAzureRmContainerName:      ${{ variables.backendAzureRmContainerName }}
+    backendAzureRmKey:                ${{ variables.backendAzureRmKey }}
+    backendAzureRmResourceGroupName:  ${{ variables.backendAzureRmResourceGroupName }}
+    backendAzureRmStorageAccountName: ${{ variables.backendAzureRmStorageAccountName }}
+    backendAzureRmSubscription:       ${{ variables.backendAzureRmSubscription }}
+    backendServiceArm:                ${{ variables.backendServiceArm }}
+    environment:                      ${{ parameters.environment }}
+    installSSHKey:                    ${{ variables.installSSHKey }}
+    planCommandOptions:               ${{ variables.planCommandOptions }}
+    terraformVersion:                 ${{ variables.terraformVersion }}
+    tfApplyForceBranch:               ${{ parameters.tfApplyForceBranch }}
+    tfCompliance:                     ${{ parameters.tfCompliance }}
+    tflintAzureRulesetVersion:        ${{ variables.tflintAzureRulesetVersion }}
+    tflintVersion:                    ${{ variables.tflintVersion }}
+    timeoutInMinutes:                 ${{ variables.timeoutInMinutes }}
+    workingDirectory:                 ${{ variables.workingDirectory }}
+
+- ${{ if contains(parameters.deploymenttype, 'Azure Virtual Desktop') }}:
+  - stage: avdconfig
+    displayName: 'AVD Configuration'
+    jobs:
+    - job: DesktopName
+      steps:
+      - task: AzurePowerShell@5
+        displayName: 'Set SessionDesktop display name'
+        inputs:
+          azurePowerShellVersion: OtherVersion
+          azureSubscription: '${{ variables.backendServiceArm }}'
+          preferredAzurePowerShellVersion: '$(azpsversion)'
+          ScriptType: 'InlineScript'
+          Inline: | 
+            Install-Module AZ.DesktopVirtualization -Scope CurrentUser -Force
+
+            $desktopname = `
+              (Get-AzWvdDesktop `
+                -ApplicationGroupName '$(ag_name)' `
+                -ResourceGroupName    '$(ag_resourcegroup)' `
+                -SubscriptionId       '$(azureSubscription)').name
+ 
+            if ([string]::IsNullOrEmpty($desktopname)) {
+              write-output "No desktop found in '$(ag_name)'" }
+            else {
+            Update-AzWvdDesktop `
+              -ApplicationGroupName '$(ag_name)' `
+              -FriendlyName '$(ag_friendlyname)' `
+              -Name 'SessionDesktop' `
+              -ResourceGroupName '$(ag_resourcegroup)' `
+              -SubscriptionId '$(azureSubscription)' | out-null
+            (Get-AzWvdDesktop `
+              -ApplicationGroupName '$(ag_name)' `
+              -Name 'SessionDesktop' `
+              -ResourceGroupName '$(ag_resourcegroup)' `
+              | Select Name,FriendlyName | Out-String).Trim()
