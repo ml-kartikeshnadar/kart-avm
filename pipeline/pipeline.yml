@@ -63,9 +63,9 @@ variables:
 resources:
   repositories:
     - repository: tftemplate
-      endpoint: InnerSrc
-      name: InnerSrc/sg-ado-pipelineterraform
-      ref: 'refs/tags/v1.2.0'
+      endpoint: ml-kartikeshnadar
+      name: ml-kartikeshnadar/ado-tfpipeline
+      ref: 'refs/heads/main'
       type: github
 
 trigger: none
