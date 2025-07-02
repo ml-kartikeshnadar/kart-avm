@@ -1,0 +1,4 @@
+---
+variables:
+  azureSubscription: 'e01f68f5-a612-4844-a0e6-3c5cb6570bc4' # Connectivity 
+  backendServiceArm: 'SC-CONNECTIVITY'     # Azure DevOps service connection name

@@ -1,0 +1,4 @@
+---
+variables:
+  azureSubscription: 'subscription_ID' # lz-sgp-mxa
+  backendServiceArm: 'su-lz-sgp-mxa'     # Azure DevOps service connection name
