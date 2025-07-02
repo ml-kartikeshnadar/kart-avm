@@ -65,17 +65,17 @@ variables:
 
 resources:
   repositories:
-    - repository: ado-tftemplate
+    - repository: tftemplate
       type: github
       endpoint: ml-kartikeshnadar
-      name: ado-tfpipeline
-      ref: 'main'
+      name: ml-kartikeshnadar/ado-tfpipeline
+      # ref: 'main'
 
 trigger: none
 pr: none
 
 stages:
-- template: terraform.yml@ado-tftemplate
+- template: terraform.yml@tftemplate
   parameters:
     applyCommandOptions:              ${{ variables.applyCommandOptions }}
     azureSubscription:                ${{ variables.azureSubscription }} # Use if service connection can access >1 sub
