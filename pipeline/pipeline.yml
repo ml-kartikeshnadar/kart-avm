@@ -29,7 +29,7 @@ parameters:
     default: false
 
 variables:
-  - name: terraformVersion                 # must match https://github.com/OuterSrc/terraform-azurerm-caf/blob/develop/main.tf
+  - name: terraformVersion                 # IMPORTANT: Update this to match the latest version in https://github.com/OuterSrc/terraform-azurerm-caf/blob/develop/main.tf
     value: '1.8.5'
   - name: tflintAzureRulesetVersion        # check latest at https://github.com/terraform-linters/tflint-ruleset-azurerm
     value: '0.26.0'
@@ -43,10 +43,11 @@ variables:
     value: $[ lower(replace(variables['Build.Repository.Name'], 'kart-avm/', '')) ]
   - name: shortname                        # repo name without hyphens for storage account name
     value: $[ lower(replace(variables.longname, '-', '')) ]
+  # Resource group name pattern: rg-<repo-name>-<environment>-tf (e.g., rg-myrepo-conn-tf)
   - name: backendAzureRmResourceGroupName  # tfstate resource group
     value: rg-$(longname)-${{ parameters.environment }}-tf
   - name: backendAzureRmStorageAccountName # tfstate storage account
-    value: st$(shortname)${{ parameters.environment }}tf
+    value: $[ substring(concat('st', variables['shortname'], parameters.environment, 'tf'), 0, 24) ]
   - name: backendAzureRmContainerName      # tfstate container name
     value: 'tfstate'
   - name: backendAzureRmKey                # tfstate file name
@@ -54,6 +55,8 @@ variables:
   - name: workingDirectory                 # terraform configuration path
     value: 'terraform/'
   - template: './env/${{ parameters.environment }}/variables.yml'
+  - name: applyCommandOptions               # Added to prevent undefined variable error
+    value: ''
   # - name: planCommandOptions               # No longer required. May be used to override automated behaviour
   #   value: 
   #     # -var-file=$(System.DefaultWorkingDirectory)/terraform/env/$(environment)/<filename>.tfvars
@@ -72,7 +75,7 @@ trigger: none
 pr: none
 
 stages:
-- template: terraform.yml@tftemplate
+- template: terraform.yml@ado-tftemplate
   parameters:
     applyCommandOptions:              ${{ variables.applyCommandOptions }}
     azureSubscription:                ${{ variables.azureSubscription }} # Use if service connection can access >1 sub
@@ -108,25 +111,33 @@ stages:
           preferredAzurePowerShellVersion: '$(azpsversion)'
           ScriptType: 'InlineScript'
           Inline: | 
-            Install-Module AZ.DesktopVirtualization -Scope CurrentUser -Force
+            # Ensure the AZ.DesktopVirtualization module is available
+            if (-not (Get-Module -ListAvailable -Name AZ.DesktopVirtualization)) {
+              Install-Module AZ.DesktopVirtualization -Scope CurrentUser -Force
+            }
 
+            # Retrieve the name of the desktop in the specified application group
             $desktopname = `
               (Get-AzWvdDesktop `
                 -ApplicationGroupName '$(ag_name)' `
                 -ResourceGroupName    '$(ag_resourcegroup)' `
                 -SubscriptionId       '$(azureSubscription)').name
  
+            # Check if a desktop was found and update its friendly name if present
             if ([string]::IsNullOrEmpty($desktopname)) {
               write-output "No desktop found in '$(ag_name)'" }
             else {
-            Update-AzWvdDesktop `
-              -ApplicationGroupName '$(ag_name)' `
-              -FriendlyName '$(ag_friendlyname)' `
-              -Name 'SessionDesktop' `
-              -ResourceGroupName '$(ag_resourcegroup)' `
-              -SubscriptionId '$(azureSubscription)' | out-null
-            (Get-AzWvdDesktop `
-              -ApplicationGroupName '$(ag_name)' `
-              -Name 'SessionDesktop' `
-              -ResourceGroupName '$(ag_resourcegroup)' `
-              | Select Name,FriendlyName | Out-String).Trim()
+              # Update the desktop's friendly name
+              Update-AzWvdDesktop `
+                -ApplicationGroupName '$(ag_name)' `
+                -FriendlyName '$(ag_friendlyname)' `
+                -Name 'SessionDesktop' `
+                -ResourceGroupName '$(ag_resourcegroup)' `
+                -SubscriptionId '$(azureSubscription)' | out-null
+              # Output the updated desktop's name and friendly name
+              (Get-AzWvdDesktop `
+                -ApplicationGroupName '$(ag_name)' `
+                -Name 'SessionDesktop' `
+                -ResourceGroupName '$(ag_resourcegroup)' `
+                | Select Name,FriendlyName | Out-String).Trim()
+            }
