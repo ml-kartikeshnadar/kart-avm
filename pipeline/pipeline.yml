@@ -68,7 +68,7 @@ resources:
     - repository: ado-tftemplate
       type: github
       endpoint: ml-kartikeshnadar
-      name: ml-kartikeshnadar/ado-tfpipeline
+      name: ado-tfpipeline
       ref: 'main'
 
 trigger: none
