@@ -63,10 +63,10 @@ variables:
 resources:
   repositories:
     - repository: ado-tftemplate
+      type: github
       endpoint: ml-kartikeshnadar
       name: ml-kartikeshnadar/ado-tfpipeline
-      ref: 'https://github.com/ml-kartikeshnadar/ado-tfpipeline'
-      type: github
+      ref: 'main'
 
 trigger: none
 pr: none
